@@ -1,1 +1,208 @@
 hello world
+
+
+
+
+sudo systemctl stop pcscd
+
+podman build -t yubikey-guide-in-docker .
+podman run --device=/dev/bus/usb --rm -it yubikey-guide-in-docker
+
+or take exact device from lsusb and use --device=/dev/bus/usb/003/004
+when unplugged and plugged again, we have to stop and start the container again with new --device
+
+USB/IP?
+https://docs.docker.com/desktop/features/usbip/
+
+
+
+
+
+
+
+M-x xterm-mouse-mode
+
+
+
+
+
+
+
+
+
+
+https://github.com/drduh/YubiKey-Guide#prepare-gnupg
+#+begin_src text
+export GNUPGHOME=$(mktemp -d -t $(date +%Y.%m.%d)-XXXX)
+#+end_src
+
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#configuration
+TODO: heredoc
+#+begin_src text
+cd $GNUPGHOME
+
+wget https://raw.githubusercontent.com/drduh/YubiKey-Guide/master/config/gpg.conf
+#+end_src
+
+
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#identity
+#+begin_src text
+export IDENTITY="YubiKey User <yubikey@example.domain>"
+#+end_src
+
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#key
+#+begin_src text
+export KEY_TYPE=rsa4096
+#+end_src
+
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#expiration
+#+begin_src text
+# export EXPIRATION=2027-05-01
+export EXPIRATION=2y
+#+end_src
+
+
+
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#passphrase
+#+begin_src text
+export PASS_GROUPSIZE=6
+export PASS_DELIMITER=+
+export PASS_LENGTH=48
+
+export CERTIFY_PASS=$(LC_ALL=C tr -dc "A-Z2-9" < /dev/urandom | \
+    tr -d "IOUS5" | \
+    fold  -w  ${PASS_GROUPSIZE:-4} | \
+    paste -sd ${PASS_DELIMITER:--} - | \
+    head  -c  ${PASS_LENGTH:-29})
+
+printf "\n$CERTIFY_PASS\n\n"
+#+end_src
+
+
+
+
+
+*** create-certify-key
+
+https://github.com/drduh/YubiKey-Guide#create-certify-key
+#+begin_src text
+echo "$CERTIFY_PASS" | \
+    gpg --batch --passphrase-fd 0 \
+        --quick-generate-key "$IDENTITY" "$KEY_TYPE" cert never
+#+end_src
+
+
+
+#+begin_src text
+export KEYID=$(gpg -k --with-colons "$IDENTITY" | \
+    awk -F: '/^pub:/ { print $5; exit }')
+
+export KEYFP=$(gpg -k --with-colons "$IDENTITY" | \
+    awk -F: '/^fpr:/ { print $10; exit }')
+
+printf "\nKey ID: %40s\nKey FP: %40s\n\n" "$KEYID" "$KEYFP"
+#+end_src
+
+
+diceware
+
+
+
+additionaly IDs
+
+
+
+
+*** create-subkeys
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#create-subkeys
+
+
+#+begin_src text
+for SUBKEY in sign encrypt auth ; do \
+    echo "$CERTIFY_PASS" | \
+    gpg --batch --pinentry-mode=loopback --passphrase-fd 0 \
+        --quick-add-key "$KEYFP" "$KEY_TYPE" "$SUBKEY" "$EXPIRATION"
+done
+#+end_src
+
+
+*** verify-keys
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#verify-keys
+
+
+
+#+begin_src text
+gpg -K
+#+end_src
+
+
+
+
+
+*** backup-keys
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#backup-keys
+
+#+begin_src text
+echo "$CERTIFY_PASS" | \
+    gpg --output $GNUPGHOME/$KEYID-Certify.key \
+        --batch --pinentry-mode=loopback --passphrase-fd 0 \
+        --armor --export-secret-keys $KEYID
+
+echo "$CERTIFY_PASS" | \
+    gpg --output $GNUPGHOME/$KEYID-Subkeys.key \
+        --batch --pinentry-mode=loopback --passphrase-fd 0 \
+        --armor --export-secret-subkeys $KEYID
+
+gpg --output $GNUPGHOME/$KEYID-$(date +%F).asc \
+    --armor --export $KEYID
+#+end_src
+
+
+TBD
+
+
+
+*** export-public-key
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#export-public-key
+
+#+begin_src text
+gpg --armor --export $KEYID | sudo tee /mnt/public/$KEYID-$(date +%F).asc
+#+end_src
+
+move the public key to usb-dongle?
+move by showing qr code?
+
+
+
+
+
+*** configure-yubikey
+
+https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#configure-yubikey
+
+#+begin_src text
+gpg --card-status
+#+end_src
+
+
+
+
+#+begin_src text
+#+end_src
+
+
+
+
+
+
+
+
