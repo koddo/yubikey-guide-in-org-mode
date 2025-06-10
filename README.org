@@ -1,12 +1,14 @@
-hello world
+nix-shell -p gnupg procps pcsctools cryptsetup yubikey-manager wget pcsclite
+mkdir -p ~/.gnupg && \
+echo 'disable-ccid' >> ~/.gnupg/scdaemon.conf && \
+echo 'verbose' >> ~/.gnupg/scdaemon.conf && \
+echo 'log-file ~/.gnupg/scdaemon.log' >> ~/.gnupg/scdaemon.conf 
 
 
 
-
-sudo systemctl stop pcscd
 
 podman build -t yubikey-guide-in-docker .
-podman run --device=/dev/bus/usb --rm -it yubikey-guide-in-docker
+podman run --userns=keep-id --device=/dev/bus/usb --rm -it yubikey-guide-in-docker gpg --card-status
 
 or take exact device from lsusb and use --device=/dev/bus/usb/003/004
 when unplugged and plugged again, we have to stop and start the container again with new --device
@@ -20,56 +22,95 @@ https://docs.docker.com/desktop/features/usbip/
 
 
 
-M-x xterm-mouse-mode
+
+
+
+copypasted from
+https://github.com/drduh/YubiKey-Guide/blob/ece9752967e8b01bb3e70919a8ccdbc252eb9387/README.md
+
+compare sections of files:
+https://stackoverflow.com/questions/434766/how-can-i-diff-two-sections-of-the-same-file/2044916#2044916
+diff -u <(head -$3 $1 | tail -n +$2) <(head -$5 $1 | tail -n +$4)
 
 
 
 
 
+emacs readme.org --eval "(setq org-confirm-babel-evaluate nil)"
 
 
 
 
 
-https://github.com/drduh/YubiKey-Guide#prepare-gnupg
-#+begin_src text
-export GNUPGHOME=$(mktemp -d -t $(date +%Y.%m.%d)-XXXX)
+*** init.el
+
+#+begin_src elisp
 #+end_src
 
+            
+#+begin_src bash :session test-session 
+echo hello
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#configuration
+for i in {1 2 3} ; do echo 1 && sleep 1 ; done
+#+end_src
+
+#+RESULTS:
+: hello
+
+
+
+#+begin_src shell :session test-session :epilogue "echo org_babel_sh_eoe"
+echo hello
+#+end_src
+
+#+RESULTS:
+| hello |        |       |      |            |       |        |
+| bash: | syntax | error | near | unexpected | token | `done' |
+
+
+
+*** prepare gnu
+
+https://github.com/drduh/YubiKey-Guide#prepare-gnupg
+https://github.com/drduh/YubiKey-Guide#configuration
 TODO: heredoc
-#+begin_src text
+
+#+begin_src shell :session test-session
+export GNUPGHOME=$(mktemp -d -t $(date +%Y.%m.%d)-XXXX)
 cd $GNUPGHOME
 
 wget https://raw.githubusercontent.com/drduh/YubiKey-Guide/master/config/gpg.conf
+
+touch scdaemon.conf
+echo "disable-ccid" >>scdaemon.conf
 #+end_src
 
 
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#identity
-#+begin_src text
+
+https://github.com/drduh/YubiKey-Guide#identity
+https://github.com/drduh/YubiKey-Guide#key
+https://github.com/drduh/YubiKey-Guide#expiration
+
+#+begin_src shell :session test-session :results verbatim
 export IDENTITY="YubiKey User <yubikey@example.domain>"
-#+end_src
-
-
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#key
-#+begin_src text
 export KEY_TYPE=rsa4096
-#+end_src
-
-
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#expiration
-#+begin_src text
 # export EXPIRATION=2027-05-01
 export EXPIRATION=2y
+
+echo all set
 #+end_src
 
+#+RESULTS:
+: all set
 
 
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#passphrase
-#+begin_src text
+
+
+https://github.com/drduh/YubiKey-Guide#passphrase
+
+#+begin_src shell :session test-session
 export PASS_GROUPSIZE=6
 export PASS_DELIMITER=+
 export PASS_LENGTH=48
@@ -83,6 +124,9 @@ export CERTIFY_PASS=$(LC_ALL=C tr -dc "A-Z2-9" < /dev/urandom | \
 printf "\n$CERTIFY_PASS\n\n"
 #+end_src
 
+#+RESULTS:
+: GWRBXV+LZHLVQ+BD222D+QPWPRA+X3X2TQ+MDJD6B+PKW3AL
+
 
 
 
@@ -90,15 +134,22 @@ printf "\n$CERTIFY_PASS\n\n"
 *** create-certify-key
 
 https://github.com/drduh/YubiKey-Guide#create-certify-key
-#+begin_src text
+
+#+begin_src shell :session test-session :results verbatim
 echo "$CERTIFY_PASS" | \
     gpg --batch --passphrase-fd 0 \
         --quick-generate-key "$IDENTITY" "$KEY_TYPE" cert never
 #+end_src
 
+#+RESULTS:
+: gpg: directory '/root/.gnupg' created
+: gpg: keybox '/root/.gnupg/pubring.kbx' created
+: gpg: /root/.gnupg/trustdb.gpg: trustdb created
+: gpg: directory '/root/.gnupg/openpgp-revocs.d' created
+: gpg: revocation certificate stored as '/root/.gnupg/openpgp-revocs.d/A47A907531613EB69751CDA18F1236B1F4D992BC.rev'
 
 
-#+begin_src text
+#+begin_src shell :session test-session :results verbatim
 export KEYID=$(gpg -k --with-colons "$IDENTITY" | \
     awk -F: '/^pub:/ { print $5; exit }')
 
@@ -107,6 +158,13 @@ export KEYFP=$(gpg -k --with-colons "$IDENTITY" | \
 
 printf "\nKey ID: %40s\nKey FP: %40s\n\n" "$KEYID" "$KEYFP"
 #+end_src
+
+#+RESULTS:
+: gpg: checking the trustdb
+: gpg: marginals needed: 3  completes needed: 1  trust model: pgp
+: gpg: depth: 0  valid:   1  signed:   0  trust: 0-, 0q, 0n, 0m, 0f, 1u
+: Key ID:                         8F1236B1F4D992BC
+: Key FP: A47A907531613EB69751CDA18F1236B1F4D992BC
 
 
 diceware
@@ -120,10 +178,10 @@ additionaly IDs
 
 *** create-subkeys
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#create-subkeys
+https://github.com/drduh/YubiKey-Guide#create-subkeys
 
 
-#+begin_src text
+#+begin_src shell :session test-session :results verbatim
 for SUBKEY in sign encrypt auth ; do \
     echo "$CERTIFY_PASS" | \
     gpg --batch --pinentry-mode=loopback --passphrase-fd 0 \
@@ -131,16 +189,28 @@ for SUBKEY in sign encrypt auth ; do \
 done
 #+end_src
 
+#+RESULTS:
+
 
 *** verify-keys
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#verify-keys
+https://github.com/drduh/YubiKey-Guide#verify-keys
 
 
 
-#+begin_src text
+#+begin_src shell :session test-session :results verbatim
 gpg -K
 #+end_src
+
+#+RESULTS:
+: /root/.gnupg/pubring.kbx
+: ------------------------
+: sec   rsa4096 2025-06-04 [C]
+:       A47A907531613EB69751CDA18F1236B1F4D992BC
+: uid           [ultimate] YubiKey User <yubikey@example.domain>
+: ssb   rsa4096 2025-06-04 [S] [expires: 2027-06-04]
+: ssb   rsa4096 2025-06-04 [E] [expires: 2027-06-04]
+: ssb   rsa4096 2025-06-04 [A] [expires: 2027-06-04]
 
 
 
@@ -148,9 +218,9 @@ gpg -K
 
 *** backup-keys
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#backup-keys
+https://github.com/drduh/YubiKey-Guide#backup-keys
 
-#+begin_src text
+#+begin_src shell :session test-session :results verbatim
 echo "$CERTIFY_PASS" | \
     gpg --output $GNUPGHOME/$KEYID-Certify.key \
         --batch --pinentry-mode=loopback --passphrase-fd 0 \
@@ -165,6 +235,8 @@ gpg --output $GNUPGHOME/$KEYID-$(date +%F).asc \
     --armor --export $KEYID
 #+end_src
 
+#+RESULTS:
+
 
 TBD
 
@@ -172,11 +244,24 @@ TBD
 
 *** export-public-key
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#export-public-key
+https://github.com/drduh/YubiKey-Guide#export-public-key
 
-#+begin_src text
-gpg --armor --export $KEYID | sudo tee /mnt/public/$KEYID-$(date +%F).asc
+#+begin_src shell :session test-session :results verbatim
+# gpg --armor --export $KEYID | sudo tee /mnt/public/$KEYID-$(date +%F).asc
+gpg --armor --export $KEYID | head
 #+end_src
+
+#+RESULTS:
+: -----BEGIN PGP PUBLIC KEY BLOCK-----
+: 
+: mQINBGhAJx4BEADrWNQkxsrUdiUGGpWW0vL802zbzhRHw6Py5htMYM7qtbRdC5id
+: uBHM3J0WRcyQP8bJHc0okZ2Pea5Lwj5aTZmb+JtWxOgFa61bqSfbgI2+vspBVcRw
+: G0ympHLSYYU+rYf9piMjIRiQyOH9MURy/NNeiYv5bSnWuTKFHVKQDmfYHp//0OYU
+: 9uS1ntiIOGLb8tDdf/GEIoGtUymIkNwrC7IjeIM76j9ZFfL/E1JJjeDDjEGItwzr
+: 6rIP8BEiP1yKiWHTGN3/2ftlt58+oadncLu1u5hSl0JAuZwej/9Dn10fA0WqWyJL
+: Gj5Lc/H02LrVOPZxcICVEngwYo+aLMaZxXWeS6mCbwM2BS9GM0P8njQpIH9Sk6rF
+: QOtqgFwu8JjTgtGia5SUCRHra24oa4hW+CDi6FyD819f6qEizdTnI86UXbGt84/r
+: 5v4pGWAErl2zekx4UyOTFnbrnXiRIDtcQ0de0BaHtJFjxfWyDRvBDVI+C8pvVkgq
 
 move the public key to usb-dongle?
 move by showing qr code?
@@ -187,11 +272,25 @@ move by showing qr code?
 
 *** configure-yubikey
 
-https://github.com/drduh/YubiKey-Guide?tab=readme-ov-file#configure-yubikey
+https://github.com/drduh/YubiKey-Guide#configure-yubikey
+
 
 #+begin_src text
+sudo systemctl stop pcscd
+#+end_src
+
+
+#+begin_src shell :session test-session :results verbatim
 gpg --card-status
 #+end_src
+
+#+RESULTS:
+: gpg: selecting card failed: No such device
+: gpg: OpenPGP card not available: No such device
+
+
+
+
 
 
 
