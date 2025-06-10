@@ -34,3 +34,19 @@ CMD ["emacs", "--load", "init.el", "README.org"]
 
 # Or, in case we run bash in this container, it would be convenient to quickly get this command from history.
 RUN echo 'emacs --load init.el README.org' >> ~/.bash_history
+
+
+
+
+
+
+
+
+
+
+# gpg --card-status only works for appuser in a podman container, not in a docker container for some reaspon.
+# It works fine under root.
+USER root
+RUN apt-get install -y procps
+
+
